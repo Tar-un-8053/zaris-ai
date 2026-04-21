@@ -1,0 +1,18 @@
+{
+  "devices": {
+    "test_light_1": {
+      "id": "test_light_1",
+      "name": "Test Light",
+      "type": "light",
+      "room": "bedroom",
+      "state": {},
+      "capabilities": [
+        "on_off",
+        "brightness"
+      ],
+      "last_updated": "2026-04-13T23:47:12.437642",
+      "mqtt_topic": "home/bedroom/test_light_1"
+    }
+  },
+  "last_updated": "2026-04-13T23:47:12.438481"
+}

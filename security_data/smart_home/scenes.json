@@ -1,0 +1,115 @@
+{
+  "scenes": {
+    "goodnight": {
+      "id": "goodnight",
+      "name": "Good Night",
+      "description": "Turn off all lights at night",
+      "triggers": [
+        {
+          "type": "time",
+          "condition": {
+            "hour": 23
+          }
+        }
+      ],
+      "actions": [
+        {
+          "device_id": "all_lights",
+          "command": {
+            "on_off": false
+          },
+          "delay_seconds": 0
+        }
+      ],
+      "enabled": true,
+      "last_triggered": "2026-04-13T23:47:12.432658",
+      "trigger_count": 1
+    },
+    "morning": {
+      "id": "morning",
+      "name": "Good Morning",
+      "description": "Turn on lights in the morning",
+      "triggers": [
+        {
+          "type": "time",
+          "condition": {
+            "hour": 7
+          }
+        }
+      ],
+      "actions": [
+        {
+          "device_id": "all_lights",
+          "command": {
+            "on_off": true,
+            "brightness": 80
+          },
+          "delay_seconds": 0
+        }
+      ],
+      "enabled": true,
+      "last_triggered": "",
+      "trigger_count": 0
+    },
+    "away_mode": {
+      "id": "away_mode",
+      "name": "Away Mode",
+      "description": "Turn off all devices when leaving",
+      "triggers": [
+        {
+          "type": "voice",
+          "condition": {
+            "keywords": [
+              "away mode",
+              "leaving home",
+              "goodbye home"
+            ]
+          }
+        }
+      ],
+      "actions": [
+        {
+          "device_id": "all_devices",
+          "command": {
+            "on_off": false
+          },
+          "delay_seconds": 0
+        }
+      ],
+      "enabled": true,
+      "last_triggered": "2026-04-13T23:47:12.445202",
+      "trigger_count": 3
+    },
+    "movie_mode": {
+      "id": "movie_mode",
+      "name": "Movie Mode",
+      "description": "Dim lights for movie",
+      "triggers": [
+        {
+          "type": "voice",
+          "condition": {
+            "keywords": [
+              "movie mode",
+              "watch movie",
+              "cinema mode"
+            ]
+          }
+        }
+      ],
+      "actions": [
+        {
+          "device_id": "all_lights",
+          "command": {
+            "on_off": true,
+            "brightness": 20
+          },
+          "delay_seconds": 0
+        }
+      ],
+      "enabled": true,
+      "last_triggered": "2026-04-13T23:47:12.440551",
+      "trigger_count": 3
+    }
+  },
+  "last_updated": "2026-04-20T11:23:17.627481"
+}

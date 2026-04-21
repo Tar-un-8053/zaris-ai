@@ -4,6 +4,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import webbrowser as _wb
 
 import eel
@@ -23,6 +24,9 @@ from backend.security.storage import log_security_event
 from backend.download_scanner import start_download_scanner, stop_download_scanner, get_monitored_folders, add_monitored_folder, remove_monitored_folder
 
 _INSTANCE_LOCK_SOCKET = None
+_SYSTEM_UNLOCKED = False
+_VERIFICATION_ATTEMPTS = 0
+_MAX_VERIFICATION_ATTEMPTS = 5
 
 
 for _stream_name in ("stdout", "stderr"):
@@ -61,50 +65,215 @@ def _acquire_single_instance_lock():
         return False
 
 
+def is_system_unlocked():
+    return _SYSTEM_UNLOCKED
+
+
+def set_system_unlocked(unlocked: bool):
+    global _SYSTEM_UNLOCKED
+    _SYSTEM_UNLOCKED = unlocked
+
+
+@eel.expose
+def getAuthStatus():
+    return {
+        "unlocked": _SYSTEM_UNLOCKED,
+        "attempts": _VERIFICATION_ATTEMPTS,
+        "max_attempts": _MAX_VERIFICATION_ATTEMPTS
+    }
+
+
 @eel.expose
 def ui_init():
     log_security_event("ui_history", True, reason="ui_initialized", metadata={"surface": "eel"})
     
-    # Check if startup face scan is enabled (default: enabled)
-    import os
     startup_scan_enabled = os.getenv("ZARIS_STARTUP_FACE_SCAN", os.getenv("JARVIS_STARTUP_FACE_SCAN", "1")).strip().lower() not in {"0", "false", "no"}
     
     if startup_scan_enabled:
-        startup_face_scan()
+        mandatory_face_verification()
     else:
+        set_system_unlocked(True)
         startup_greeting()
 
 
-def startup_face_scan():
-    """Face scan on startup for owner verification."""
+def mandatory_face_verification():
+    """
+    Mandatory face verification - system will NOT proceed without successful verification.
+    Keeps prompting until face is recognized or user explicitly enrolls.
+    """
+    global _VERIFICATION_ATTEMPTS, _SYSTEM_UNLOCKED
+    
+    from backend.face_rec import get_face_status, recognize_face, face_engine_ready
+    
+    is_ready, status_msg = get_face_status()
+    
+    if not is_ready:
+        print(f"\n{'='*60}")
+        print("FACE VERIFICATION REQUIRED")
+        print(f"{'='*60}")
+        print(f"Status: {status_msg}")
+        print(f"{'='*60}\n")
+        
+        speak("Face verification required. Please enroll your face first.")
+        speak("Click the Face button on the screen to register your face.")
+        
+        log_security_event(
+            "auth_attempt", 
+            False, 
+            reason="face_engine_not_ready",
+            metadata={"status": status_msg}
+        )
+        
+        return False
+    
+    print(f"\n{'='*60}")
+    print("SECURITY CHECKPOINT - OWNER VERIFICATION")
+    print(f"{'='*60}")
+    print("System is LOCKED until face verification succeeds.")
+    print("Camera ki taraf dekho...")
+    print(f"{'='*60}\n")
+    
+    while not _SYSTEM_UNLOCKED and _VERIFICATION_ATTEMPTS < _MAX_VERIFICATION_ATTEMPTS:
+        _VERIFICATION_ATTEMPTS += 1
+        
+        print(f"\n[Attempt {_VERIFICATION_ATTEMPTS}/{_MAX_VERIFICATION_ATTEMPTS}] Scanning face...")
+        speak(f"Attempt {_VERIFICATION_ATTEMPTS}. Please look at the camera.")
+        
+        face_name, confidence = recognize_face(timeout=10, show_window=True)
+        
+        if face_name:
+            print(f"\n{'='*60}")
+            print(f"FACE VERIFIED: {face_name}")
+            print(f"Confidence: {confidence:.1f}")
+            print(f"{'='*60}\n")
+            
+            log_security_event(
+                "auth_attempt", 
+                True, 
+                reason="startup_face_verified", 
+                face_name=face_name, 
+                face_confidence=confidence
+            )
+            
+            _SYSTEM_UNLOCKED = True
+            speak(f"Identity verified. Welcome back {face_name}. Security system online.")
+            
+            _initialize_multi_agent_system()
+            startup_greeting()
+            
+            return True
+        else:
+            print(f"\nFace not recognized (Attempt {_VERIFICATION_ATTEMPTS}/{_MAX_VERIFICATION_ATTEMPTS})")
+            log_security_event(
+                "auth_attempt", 
+                False, 
+                reason="startup_face_not_recognized",
+                metadata={"attempt": _VERIFICATION_ATTEMPTS}
+            )
+            
+            if _VERIFICATION_ATTEMPTS < _MAX_VERIFICATION_ATTEMPTS:
+                speak("Face not recognized. Please try again.")
+                time.sleep(1)
+            else:
+                print(f"\n{'='*60}")
+                print("MAX VERIFICATION ATTEMPTS REACHED")
+                print("System remains LOCKED for security.")
+                print("Click 'Enroll Face' to register your face.")
+                print(f"{'='*60}\n")
+                
+                speak("Maximum attempts reached. System remains locked for security.")
+                speak("Please enroll your face using the Face button on screen.")
+                
+                log_security_event(
+                    "auth_attempt",
+                    False,
+                    reason="max_verification_attempts_reached",
+                    metadata={"attempts": _VERIFICATION_ATTEMPTS}
+                )
+                return False
+    
+    return False
+
+
+def _initialize_multi_agent_system():
+    try:
+        from backend.core.bridge import initialize_bridge
+        result = initialize_bridge()
+        if result:
+            print("[Main] Multi-agent system initialized")
+        else:
+            print("[Main] Multi-agent system initialization skipped")
+    except Exception as e:
+        print(f"[Main] Multi-agent system not available: {e}")
+
+
+@eel.expose
+def verifyAndUnlock():
+    """Manual unlock attempt from UI."""
+    global _VERIFICATION_ATTEMPTS, _SYSTEM_UNLOCKED
+    
+    if _SYSTEM_UNLOCKED:
+        return {"success": True, "message": "Already unlocked"}
+    
     from backend.face_rec import get_face_status, recognize_face
     
     is_ready, status_msg = get_face_status()
     
     if not is_ready:
-        print(f"Face scan skipped: {status_msg}")
-        startup_greeting()
-        return
+        return {"success": False, "message": f"Face engine not ready: {status_msg}"}
     
-    print("\n" + "=" * 50)
-    print("OWNER VERIFICATION - Face Scan")
-    print("Camera ki taraf dekho...")
-    print("=" * 50)
-    
-    speak("Owner verification start. Please look at the camera.")
-    
-    face_name, confidence = recognize_face(timeout=8, show_window=True)
+    _VERIFICATION_ATTEMPTS += 1
+    face_name, confidence = recognize_face(timeout=10, show_window=True)
     
     if face_name:
-        print(f"Face recognized: {face_name} (confidence: {confidence:.1f})")
-        log_security_event("auth_attempt", True, reason="startup_face_verified", face_name=face_name, face_confidence=confidence)
-        speak(f"Welcome back {face_name}. Security system online.")
+        _SYSTEM_UNLOCKED = True
+        log_security_event(
+            "auth_attempt",
+            True,
+            reason="manual_face_verified",
+            face_name=face_name,
+            face_confidence=confidence
+        )
+        
+        _initialize_multi_agent_system()
         startup_greeting()
-    else:
-        print("Face not recognized.")
-        log_security_event("auth_attempt", False, reason="startup_face_not_recognized")
-        speak("Face not recognized. Press the face button to enroll or continue.")
+        
+        return {"success": True, "message": f"Welcome {face_name}"}
+    
+    log_security_event("auth_attempt", False, reason="manual_face_not_recognized")
+    return {"success": False, "message": "Face not recognized. Please try again."}
+
+
+@eel.expose
+def enrollAndUnlock(name: str):
+    """Enroll face and unlock system."""
+    global _SYSTEM_UNLOCKED, _VERIFICATION_ATTEMPTS
+    
+    if _SYSTEM_UNLOCKED:
+        return {"success": True, "message": "Already unlocked"}
+    
+    speak(f"Enrolling face for {name}. Please look at the camera.")
+    
+    success, message = register_face(name, num_samples=30)
+    
+    if success:
+        log_security_event(
+            "auth_attempt",
+            True,
+            reason="face_enrolled_unlocked",
+            face_name=name
+        )
+        
+        _SYSTEM_UNLOCKED = True
+        _VERIFICATION_ATTEMPTS = 0
+        
+        _initialize_multi_agent_system()
+        speak(f"Face enrolled successfully. Welcome {name}. System unlocked.")
         startup_greeting()
+        
+        return {"success": True, "message": f"Enrolled and unlocked. Welcome {name}!"}
+    
+    return {"success": False, "message": message}
 
 
 @eel.expose
@@ -119,6 +288,12 @@ def reportSpeechDone(speech_id):
 
 @eel.expose
 def micButtonPressed():
+    global _SYSTEM_UNLOCKED
+    
+    if not _SYSTEM_UNLOCKED:
+        speak("System is locked. Please verify your face first.")
+        return None
+    
     print("\nMic button pressed")
     log_security_event("ui_history", True, reason="mic_button_pressed", metadata={"surface": "frontend"})
 
@@ -154,6 +329,12 @@ def micButtonPressed():
 
 @eel.expose
 def submitSecurityCommand(text):
+    global _SYSTEM_UNLOCKED
+    
+    if not _SYSTEM_UNLOCKED:
+        speak("System is locked. Please verify your face first.")
+        return
+    
     def _run():
         if text and text.strip():
             print(f"\nConsole command: {text}")
@@ -171,7 +352,11 @@ def submitSecurityCommand(text):
 
 @eel.expose
 def processPhoneAudio(audio_base64, mime_type="audio/webm"):
-    """Process audio from phone browser and return transcript."""
+    global _SYSTEM_UNLOCKED
+    
+    if not _SYSTEM_UNLOCKED:
+        return {"text": None, "latency": 0, "error": "system_locked"}
+    
     import time
     import backend.feature as feat
     from backend.command import recognizer
@@ -226,13 +411,11 @@ def processPhoneAudio(audio_base64, mime_type="audio/webm"):
 
 
 def _convert_to_wav(audio_bytes, mime_type):
-    """Convert audio bytes to WAV format for speech recognition."""
     import subprocess
     import tempfile
     import os
     
     try:
-        # Try pydub with imageio-ffmpeg
         try:
             from pydub import AudioSegment
             import imageio_ffmpeg
@@ -252,7 +435,6 @@ def _convert_to_wav(audio_bytes, mime_type):
         except Exception as pydub_err:
             print(f"Pydub conversion failed: {pydub_err}")
         
-        # Fallback: Use ffmpeg directly with imageio-ffmpeg
         try:
             import imageio_ffmpeg
             ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
@@ -288,6 +470,8 @@ def _convert_to_wav(audio_bytes, mime_type):
 
 @eel.expose
 def registerFace(name):
+    global _SYSTEM_UNLOCKED
+    
     def _run():
         log_security_event(
             "ui_history",
@@ -305,6 +489,11 @@ def registerFace(name):
             metadata={"message": message},
         )
         speak(message)
+        
+        if _success and not _SYSTEM_UNLOCKED:
+            _SYSTEM_UNLOCKED = True
+            _initialize_multi_agent_system()
+            startup_greeting()
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -331,6 +520,9 @@ def recognizeFace():
 
 @eel.expose
 def getMemoryTwinDashboard():
+    if not _SYSTEM_UNLOCKED:
+        return {"error": "System locked"}
+    
     log_security_event(
         "ui_history",
         True,
@@ -349,6 +541,9 @@ def addMemoryTwinEntry(
     duration_min=20,
     importance=7,
 ):
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     log_security_event(
         "ui_history",
         True,
@@ -379,6 +574,9 @@ def ingestMemoryTwinUpload(
     importance=7,
     duration_min=20,
 ):
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     log_security_event(
         "ui_history",
         True,
@@ -401,6 +599,9 @@ def ingestMemoryTwinUpload(
 
 @eel.expose
 def verifyMemoryTwinIntegrity():
+    if not _SYSTEM_UNLOCKED:
+        return {"valid": False, "error": "System locked"}
+    
     log_security_event(
         "ui_history",
         True,
@@ -412,6 +613,9 @@ def verifyMemoryTwinIntegrity():
 
 @eel.expose
 def checkFileForThreat(file_path):
+    if not _SYSTEM_UNLOCKED:
+        return {"found": False, "message": "System locked", "should_show_popup": False}
+    
     from backend.security.zaris_core import check_file_threat
     try:
         result = check_file_threat(file_path)
@@ -434,6 +638,9 @@ def checkFileForThreat(file_path):
 
 @eel.expose
 def handleThreatAction(action, file_path):
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     from backend.security.zaris_core import find_and_delete_file
     from backend.threat_detection import block_file_path
     from pathlib import Path
@@ -494,6 +701,9 @@ def handleThreatAction(action, file_path):
 
 @eel.expose
 def getSystemStats():
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     from backend.system_monitor import get_system_monitor
     monitor = get_system_monitor()
     
@@ -521,6 +731,9 @@ def getSystemStats():
 
 @eel.expose
 def getScanFolders():
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     try:
         folders = get_monitored_folders()
         return {"success": True, "folders": folders}
@@ -530,6 +743,9 @@ def getScanFolders():
 
 @eel.expose
 def addScanFolder(folder_path):
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     try:
         result = add_monitored_folder(folder_path)
         return result
@@ -539,6 +755,9 @@ def addScanFolder(folder_path):
 
 @eel.expose
 def removeScanFolder(folder_path):
+    if not _SYSTEM_UNLOCKED:
+        return {"success": False, "error": "System locked"}
+    
     try:
         result = remove_monitored_folder(folder_path)
         return result
@@ -547,15 +766,15 @@ def removeScanFolder(folder_path):
 
 
 def start():
+    global _SYSTEM_UNLOCKED
+    
     if not _acquire_single_instance_lock():
         return
 
     eel.init("frontend")
 
     start_cyber_security_services()
-    start_hotword()
     
-    # Start download scanner
     try:
         start_download_scanner(threat_callback=_on_download_threat_detected)
         print("Download scanner started. Monitoring for harmful files.")
@@ -567,10 +786,15 @@ def start():
     local_ip = _get_local_ip()
     port = 8001
 
-    print("\n====================================")
-    print(f"ZARIS AI running at: http://localhost:{port}")
-    print(f"Phone access: http://{local_ip}:{port}")
-    print("====================================\n")
+    print("\n" + "=" * 60)
+    print("ZARIS AI SECURITY SYSTEM")
+    print("=" * 60)
+    print(f"Local: http://localhost:{port}")
+    print(f"Phone: http://{local_ip}:{port}")
+    print("=" * 60)
+    print("\n🔒 System is LOCKED until face verification.")
+    print("   Please look at the camera when prompted.")
+    print("=" * 60 + "\n")
 
     threading.Timer(1.5, lambda: _wb.open(f"http://localhost:{port}/index.html")).start()
 
@@ -586,7 +810,7 @@ def start():
 
 
 def _on_browser_close(*args):
-    print("Browser band hua, security service background me chalti rahegi.")
+    print("Browser closed. Security service continues in background.")
     try:
         stop_download_scanner()
     except Exception:

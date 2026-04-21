@@ -1,0 +1,103 @@
+# ZARIS AI Core Dependencies
+# Install with: pip install -r requirements_advanced.txt
+
+# ============================================
+# CORE FRAMEWORK
+# ============================================
+python>=3.10
+langgraph>=0.0.20
+langchain>=0.1.0
+langchain-community>=0.0.10
+
+# ============================================
+# LOCAL LLM INFERENCE
+# ============================================
+# Option 1: llama.cpp (CPU optimized, works on any laptop)
+llama-cpp-python>=0.2.0
+
+# Option 2: Transformers + PyTorch (GPU recommended)
+torch>=2.0.0
+transformers>=4.36.0
+accelerate>=0.25.0
+sentence-transformers>=2.2.0
+
+# ============================================
+# SPEECH RECOGNITION
+# ============================================
+# Faster Whisper (10x faster than original)
+faster-whisper>=0.10.0
+
+# Original Whisper fallback
+openai-whisper>=20231117
+
+# SpeechRecognition (Google API fallback)
+SpeechRecognition>=3.10.0
+
+# Text-to-Speech
+edge-tts>=6.1.0
+
+# ============================================
+# VISION & FACE RECOGNITION
+# ============================================
+opencv-python>=4.8.0
+insightface>=0.7.3
+onnxruntime>=1.16.0
+onnxruntime-gpu>=1.16.0; platform_system != 'Darwin'
+
+# ============================================
+# VECTOR DATABASE & RAG
+# ============================================
+chromadb>=0.4.0
+faiss-cpu>=1.7.4
+
+# ============================================
+# SMART HOME PROTOCOLS
+# ============================================
+paho-mqtt>=1.6.0
+pyhap>=4.0.0
+
+# ============================================
+# SECURITY & NETWORKING
+# ============================================
+scapy>=2.5.0
+cryptography>=41.0.0
+send2trash>=1.8.0
+psutil>=5.9.0
+
+# ============================================
+# WEB & API
+# ============================================
+eel>=0.16.0
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# ============================================
+# DATA PROCESSING
+# ============================================
+numpy>=1.24.0
+pandas>=2.0.0
+pydub>=0.25.1
+imageio-ffmpeg>=0.4.9
+
+# ============================================
+# MACHINE LEARNING
+# ============================================
+scikit-learn>=1.3.0
+
+# ============================================
+# OPTIONAL: GPU ACCELERATION
+# ============================================
+# Uncomment if you have NVIDIA GPU:
+# nvidia-cublas-cu11>=11.11
+# nvidia-cudnn-cu11>=8.8
+
+# ============================================
+# DEVELOPMENT & TESTING
+# ============================================
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# ============================================
+# PACKAGING
+# ============================================
+pyinstaller>=6.0.0

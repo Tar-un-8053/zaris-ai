@@ -1,0 +1,61 @@
+{
+  "assistant_name": "Zaris AI",
+  "user_title": "operator",
+  "debug_mode": false,
+  "log_level": "INFO",
+  "data_dir": "security_data",
+  "models_dir": "models",
+  "llm": {
+    "provider": "auto",
+    "model_name": "phi-2",
+    "model_path": null,
+    "context_window": 2048,
+    "max_tokens": 512,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "quantization": "q4_k_m",
+    "device": "auto",
+    "use_gpu": true
+  },
+  "voice": {
+    "stt_engine": "whisper",
+    "stt_model": "base",
+    "stt_device": "auto",
+    "tts_engine": "edge_tts",
+    "tts_voice": "en-IN-PratimaNeural",
+    "wake_words": ["zaris", "hey zaris", "jarvis", "hey jarvis"],
+    "wake_threshold": 0.5
+  },
+  "security": {
+    "enabled": true,
+    "auto_arm_on_startup": true,
+    "require_face": true,
+    "require_voice": false,
+    "require_pin": false,
+    "threat_score_threshold": 70,
+    "failed_attempt_threshold": 3,
+    "monitor_usb": true,
+    "monitor_processes": true,
+    "monitor_downloads": true
+  },
+  "memory": {
+    "enabled": true,
+    "vector_db": "chromadb",
+    "embedding_model": "all-MiniLM-L6-v2",
+    "max_records": 10000,
+    "retention_days": 365
+  },
+  "home": {
+    "enabled": false,
+    "mqtt_broker": "localhost",
+    "mqtt_port": 1883,
+    "homekit_enabled": false,
+    "alexa_enabled": false
+  },
+  "ui": {
+    "frontend_mode": "eel",
+    "theme": "dark",
+    "enable_avatar": true,
+    "enable_animations": true
+  }
+}
